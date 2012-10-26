@@ -35,7 +35,6 @@ func (self *Writer) Write(p []byte) (n int, err error) {
   return self.writer.Write(buf)
 }
 
-
 func NewXorReader(reader io.Reader, secret uint64) *Reader {
   self := &Reader{
     reader: reader,
@@ -56,8 +55,8 @@ type Reader struct {
 func (self *Reader) Read(p []byte) (n int, err error) {
   buf := make([]byte, len(p))
   n, err = self.reader.Read(buf)
-  for i, b := range buf {
-    p[i] = b ^ self.keys[self.keyIndex]
+  for i := 0; i < n; i++ {
+    p[i] = buf[i] ^ self.keys[self.keyIndex]
     self.keyIndex++
     if self.keyIndex == 4 {
       self.keyIndex = 0
