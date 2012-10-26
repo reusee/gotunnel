@@ -7,15 +7,31 @@ import (
   "encoding/binary"
   "io"
   "hash/fnv"
+  "bytes"
 )
 
 var secret uint64
+var uint64Keys []uint64
+var byteKeys []byte
 
 func init() {
   hasher := fnv.New64()
   hasher.Write([]byte(KEY))
   secret = hasher.Sum64()
   fmt.Printf("secret %d\n", secret)
+
+  buf := new(bytes.Buffer)
+  binary.Write(buf, binary.LittleEndian, secret)
+  byteKeys = buf.Bytes()
+
+  keys := byteKeys[:]
+  for i := 0; i < 8; i++ {
+    var key uint64
+    binary.Read(buf, binary.LittleEndian, &key)
+    uint64Keys = append(uint64Keys, key)
+    keys = append(keys[1:], keys[0])
+    buf = bytes.NewBuffer(keys)
+  }
 }
 
 func main() {
