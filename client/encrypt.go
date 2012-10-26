@@ -61,7 +61,6 @@ func (self *Reader) Read(p []byte) (n int, err error) {
   l := len(p)
   buf := make([]byte, l)
   n, err = self.reader.Read(buf)
-  fmt.Printf("%d\n", n)
   j := 0
   if n >= 8 {
     pU64Slice := getUint64Slice(p)
