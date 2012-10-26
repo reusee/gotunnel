@@ -4,7 +4,6 @@ import (
   "io"
   "reflect"
   "unsafe"
-  "fmt"
 )
 
 func NewXorWriter(writer io.Writer, secret uint64) *Writer {
