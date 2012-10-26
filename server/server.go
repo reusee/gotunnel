@@ -9,8 +9,6 @@ import (
   "hash/fnv"
 )
 
-const BUF_SIZE = 20480
-
 var (
   key = "abcdar"
   secret uint64
@@ -61,36 +59,8 @@ func handleConnection(conn net.Conn) {
   }
   defer targetConn.Close()
 
-  go forwardToHost(conn, targetConn)
-  forwardToClient(targetConn, conn)
-}
-
-func forwardToHost(in net.Conn, out net.Conn) {
-  buf := make([]byte, BUF_SIZE)
-  for {
-    n, err := in.Read(buf)
-    if err == io.EOF {
-      break
-    } else if err != nil {
-      fmt.Printf("error %v\n", err)
-      break
-    }
-    out.Write(buf[:n])
-  }
-}
-
-func forwardToClient(in net.Conn, out net.Conn) {
-  buf := make([]byte, BUF_SIZE)
-  for {
-    n, err := in.Read(buf)
-    if err == io.EOF {
-      break
-    } else if err != nil {
-      fmt.Printf("error %v\n", err)
-      break
-    }
-    out.Write(buf[:n])
-  }
+  go io.Copy(NewXorWriter(conn, secret), targetConn)
+  io.Copy(targetConn, NewXorReader(conn, secret))
 }
 
 func read(reader io.Reader, v interface{}) {

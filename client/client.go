@@ -10,11 +10,9 @@ import (
   "hash/fnv"
 )
 
-const BUF_SIZE = 20480
-
 var (
   port = ":8808"
-  serverHostPort = "pt.reus.me:38808"
+  serverHostPort = "127.0.0.1:38808"
   key = "abcdar"
   secret uint64
 )
@@ -110,8 +108,8 @@ func handleConnection(conn net.Conn) {
     write(serverConn, byte(len(hostPort)))
     write(serverConn, []byte(hostPort))
 
-    go forwardToServer(conn, serverConn)
-    forwardToConn(serverConn, conn)
+    go io.Copy(conn, NewXorReader(serverConn, secret))
+    io.Copy(NewXorWriter(serverConn, secret), conn)
 
   } else if cmd == CMD_BIND {
   } else if cmd == CMD_UDP_ASSOCIATE {
@@ -128,34 +126,6 @@ func writeAck(conn net.Conn, reply byte) {
   write(conn, ADDR_TYPE_IP)
   write(conn, [4]byte{0, 0, 0, 0})
   write(conn, uint16(0))
-}
-
-func forwardToServer(in net.Conn, out net.Conn) {
-  buf := make([]byte, BUF_SIZE)
-  for {
-    n, err := in.Read(buf)
-    if err == io.EOF {
-      break
-    } else if err != nil {
-      fmt.Printf("error %v\n", err)
-      break
-    }
-    out.Write(buf[:n])
-  }
-}
-
-func forwardToConn(in net.Conn, out net.Conn) {
-  buf := make([]byte, BUF_SIZE)
-  for {
-    n, err := in.Read(buf)
-    if err == io.EOF {
-      break
-    } else if err != nil {
-      fmt.Printf("error %v\n", err)
-      break
-    }
-    out.Write(buf[:n])
-  }
 }
 
 func read(reader io.Reader, v interface{}) {
