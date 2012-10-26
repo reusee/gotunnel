@@ -72,9 +72,9 @@ func forwardToHost(in net.Conn, out net.Conn) {
     if err == io.EOF {
       break
     } else if err != nil {
+      fmt.Printf("error %v\n", err)
       break
     }
-    fmt.Printf("%d\n", n)
     out.Write(buf[:n])
   }
 }
@@ -86,9 +86,9 @@ func forwardToClient(in net.Conn, out net.Conn) {
     if err == io.EOF {
       break
     } else if err != nil {
+      fmt.Printf("error %v\n", err)
       break
     }
-    fmt.Printf("%d\n", n)
     out.Write(buf[:n])
   }
 }

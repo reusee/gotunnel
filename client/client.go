@@ -14,7 +14,7 @@ const BUF_SIZE = 20480
 
 var (
   port = ":8808"
-  serverHostPort = "127.0.0.1:38808"
+  serverHostPort = "pt.reus.me:38808"
   key = "abcdar"
   secret uint64
 )
@@ -137,9 +137,9 @@ func forwardToServer(in net.Conn, out net.Conn) {
     if err == io.EOF {
       break
     } else if err != nil {
+      fmt.Printf("error %v\n", err)
       break
     }
-    fmt.Printf("%d\n", n)
     out.Write(buf[:n])
   }
 }
@@ -151,9 +151,9 @@ func forwardToConn(in net.Conn, out net.Conn) {
     if err == io.EOF {
       break
     } else if err != nil {
+      fmt.Printf("error %v\n", err)
       break
     }
-    fmt.Printf("%d\n", n)
     out.Write(buf[:n])
   }
 }
