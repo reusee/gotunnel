@@ -10,26 +10,21 @@ import (
   "hash/fnv"
 )
 
-var (
-  port = ":8808"
-  serverHostPort = "127.0.0.1:38808"
-  key = "abcdar"
-  secret uint64
-)
+var secret uint64
 
 func init() {
   hasher := fnv.New64()
-  hasher.Write([]byte(key))
+  hasher.Write([]byte(KEY))
   secret = hasher.Sum64()
   fmt.Printf("secret %d\n", secret)
 }
 
 func main() {
-  ln, err := net.Listen("tcp", port)
+  ln, err := net.Listen("tcp", PORT)
   if err != nil {
-    log.Fatal("listen error on port %s\n", port)
+    log.Fatal("listen error on port %s\n", PORT)
   }
-  fmt.Printf("listening on %s\n", port)
+  fmt.Printf("listening on %s\n", PORT)
   for {
     conn, err := ln.Accept()
     if err != nil {
@@ -84,7 +79,8 @@ func handleConnection(conn net.Conn) {
   var port uint16
   read(conn, &port)
 
-  if cmd == CMD_CONNECT {
+  switch cmd {
+  case CMD_CONNECT:
     var hostPort string
     if addrType == ADDR_TYPE_IP {
       ip := net.IPv4(address[0], address[1], address[2], address[3])
@@ -94,7 +90,7 @@ func handleConnection(conn net.Conn) {
     }
     fmt.Printf("hostPort %s\n", hostPort)
 
-    serverConn, err := net.Dial("tcp", serverHostPort)
+    serverConn, err := net.Dial("tcp", SERVER)
     if err != nil {
       fmt.Printf("server connect fail %v\n", err)
       writeAck(conn, REP_SERVER_FAILURE)
@@ -111,9 +107,9 @@ func handleConnection(conn net.Conn) {
     go io.Copy(conn, NewXorReader(serverConn, secret))
     io.Copy(NewXorWriter(serverConn, secret), conn)
 
-  } else if cmd == CMD_BIND {
-  } else if cmd == CMD_UDP_ASSOCIATE {
-  } else {
+  case CMD_BIND:
+  case CMD_UDP_ASSOCIATE:
+  default:
     writeAck(conn, REP_COMMAND_NOT_SUPPORTED)
     return
   }

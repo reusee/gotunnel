@@ -9,25 +9,21 @@ import (
   "hash/fnv"
 )
 
-var (
-  key = "abcdar"
-  secret uint64
-)
+var secret uint64
 
 func init() {
   hasher := fnv.New64()
-  hasher.Write([]byte(key))
+  hasher.Write([]byte(KEY))
   secret = hasher.Sum64()
   fmt.Printf("secret %d\n", secret)
 }
 
 func main() {
-  port := ":38808"
-  ln, err := net.Listen("tcp", port)
+  ln, err := net.Listen("tcp", PORT)
   if err != nil {
-    log.Fatal("listen error on port %s\n", port)
+    log.Fatal("listen error on port %s\n", PORT)
   }
-  fmt.Printf("listening on %s\n", port)
+  fmt.Printf("listening on %s\n", PORT)
   for {
     conn, err := ln.Accept()
     if err != nil {
