@@ -52,16 +52,12 @@ func main() {
 
 func handleConnection(conn net.Conn) {
   defer conn.Close()
-  var connSecret uint64
-  read(conn, &connSecret)
-  if connSecret != secret {
-    fmt.Printf("secret not match\n")
-    return
-  }
   var hostPortLen uint8
   read(conn, &hostPortLen)
+  encryptedHostPort := make([]byte, hostPortLen)
+  read(conn, encryptedHostPort)
   hostPort := make([]byte, hostPortLen)
-  read(conn, hostPort)
+  xorSlice(encryptedHostPort, hostPort, int(hostPortLen), 0)
   fmt.Printf("hostPort %s\n", hostPort)
 
   targetConn, err := net.Dial("tcp", string(hostPort))

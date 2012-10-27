@@ -22,24 +22,7 @@ type Writer struct {
 func (self *Writer) Write(p []byte) (n int, err error) {
   l := len(p)
   buf := make([]byte, l)
-  j := 0
-  if l >= 8 {
-    bufU64Slice := getUint64Slice(buf)
-    pU64Slice := getUint64Slice(p)
-    for i, e := range pU64Slice {
-      bufU64Slice[i] = e ^ uint64Keys[self.keyIndex]
-      j += 8
-    }
-  }
-  if l % 8 > 0 {
-    for i := 0; i < l % 8; i++ {
-      buf[i + j] = p[i + j] ^ byteKeys[self.keyIndex]
-      self.keyIndex++
-      if self.keyIndex == 8 {
-        self.keyIndex = 0
-      }
-    }
-  }
+  self.keyIndex = xorSlice(p, buf, l, self.keyIndex)
   return self.writer.Write(buf)
 }
 
@@ -60,25 +43,29 @@ func (self *Reader) Read(p []byte) (n int, err error) {
   l := len(p)
   buf := make([]byte, l)
   n, err = self.reader.Read(buf)
+  self.keyIndex = xorSlice(buf, p, n, self.keyIndex)
+  return
+}
+
+func xorSlice(from []byte, to []byte, n int, keyIndex int) int {
   j := 0
   if n >= 8 {
-    pU64Slice := getUint64Slice(p)
-    bufU64Slice := getUint64Slice(buf)
+    toU64Slice := getUint64Slice(to)
+    fromU64Slice := getUint64Slice(from)
     for i := 0; i < n / 8; i++ {
-      pU64Slice[i] = bufU64Slice[i] ^ uint64Keys[self.keyIndex]
+      toU64Slice[i] = fromU64Slice[i] ^ uint64Keys[keyIndex]
       j += 8
     }
   }
-  if n % 8 > 0 {
-    for i := 0; i < n % 8; i++ {
-      p[i + j] = buf[i + j] ^ byteKeys[self.keyIndex]
-      self.keyIndex++
-      if self.keyIndex == 8 {
-        self.keyIndex = 0
-      }
+  for j < n {
+    to[j] = from[j] ^ byteKeys[keyIndex]
+    keyIndex++
+    if keyIndex == 8 {
+      keyIndex = 0
     }
+    j++
   }
-  return
+  return keyIndex
 }
 
 func getUint64Slice(s []byte) []uint64 {

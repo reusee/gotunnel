@@ -116,9 +116,10 @@ func handleConnection(conn net.Conn) {
 
     writeAck(conn, REP_SUCCEED)
 
-    write(serverConn, secret)
     write(serverConn, byte(len(hostPort)))
-    write(serverConn, []byte(hostPort))
+    encryptedHostPort := make([]byte, len(hostPort))
+    xorSlice([]byte(hostPort), encryptedHostPort, len(hostPort), 0)
+    write(serverConn, encryptedHostPort)
 
     go io.Copy(conn, NewXorReader(serverConn, secret))
     io.Copy(NewXorWriter(serverConn, secret), conn)
