@@ -57,7 +57,7 @@ func handleConnection(conn net.Conn) {
   encryptedHostPort := make([]byte, hostPortLen)
   read(conn, encryptedHostPort)
   hostPort := make([]byte, hostPortLen)
-  xorSlice(encryptedHostPort, hostPort, int(hostPortLen), 0)
+  xorSlice(encryptedHostPort, hostPort, int(hostPortLen), int(hostPortLen % 8))
   fmt.Printf("hostPort %s\n", hostPort)
 
   targetConn, err := net.Dial("tcp", string(hostPort))
