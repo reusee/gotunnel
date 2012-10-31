@@ -21,7 +21,6 @@ func init() {
   hasher := fnv.New64()
   hasher.Write([]byte(KEY))
   secret = hasher.Sum64()
-  fmt.Printf("secret %d\n", secret)
 
   buf := new(bytes.Buffer)
   binary.Write(buf, binary.LittleEndian, secret)
@@ -43,7 +42,7 @@ func main() {
     C.enet_host_service(host, &event, 5)
     switch event._type {
     case C.ENET_EVENT_TYPE_CONNECT:
-      msg("connected from %v %v %v\n", event.peer.address.host, event.peer.address.port, event.peer.data)
+      msg("peer connected %v %v\n", event.peer.address.host, event.peer.address.port)
 
     case C.ENET_EVENT_TYPE_RECEIVE:
       go handlePacket(&event)
@@ -55,7 +54,6 @@ func main() {
 }
 
 func handlePacket(event *C.ENetEvent) {
-  fmt.Printf("channel id %d\n", event.channelID)
   data := C.GoBytes(unsafe.Pointer(event.packet.data), C.int(event.packet.dataLength))
   C.enet_packet_destroy(event.packet)
   chanId := int(event.channelID)
@@ -64,14 +62,14 @@ func handlePacket(event *C.ENetEvent) {
       hostPortLen := len(data) - 1
       hostPort := make([]byte, hostPortLen)
       xorSlice(data[1:], hostPort, int(hostPortLen), int(hostPortLen % 8))
-      fmt.Printf(">>> %s\n", hostPort)
+      msg("[%d] host %s\n", event.channelID, hostPort)
 
       conn, err := net.Dial("tcp", string(hostPort))
       if err != nil {
-        fmt.Printf("fail to connect %s\n", hostPort)
+        msg("[%d] connect fail\n", event.channelID, hostPort)
         return
       }
-      fmt.Printf("connected to %s\n", hostPort)
+      msg("[%d] connected %s\n", event.channelID, hostPort)
       channelConn[chanId] = conn
 
       exit := make(chan bool)
@@ -91,7 +89,7 @@ func handlePacket(event *C.ENetEvent) {
         if err != nil {
           break
         }
-        fmt.Printf("==< read data len %d\n", n)
+        msg("[%d] target > %d\n", event.channelID, n)
         l := n + 1
         data := make([]byte, l)
         data[0] = byte(1)
@@ -99,15 +97,17 @@ func handlePacket(event *C.ENetEvent) {
         packet := C.enet_packet_create(unsafe.Pointer(C.CString(string(data))), C.size_t(l), C.ENET_PACKET_FLAG_RELIABLE)
         C.enet_peer_send(event.peer, event.channelID, packet)
       }
-      conn.Close()
-      exit <- true
-      data := []byte{2}
-      packet := C.enet_packet_create(unsafe.Pointer(C.CString(string(data))), C.size_t(1), C.ENET_PACKET_FLAG_RELIABLE)
-      C.enet_peer_send(event.peer, event.channelID, packet)
+      defer func() {
+        conn.Close()
+        exit <- true
+        data := []byte{2}
+        packet := C.enet_packet_create(unsafe.Pointer(C.CString(string(data))), C.size_t(1), C.ENET_PACKET_FLAG_RELIABLE)
+        C.enet_peer_send(event.peer, event.channelID, packet)
+      }()
 
     case byte(1): // data packet
       dataLen := len(data) - 1
-      fmt.Printf("receive data from chan %d len %d\n", chanId, dataLen)
+      msg("[%d] client > %d\n", event.channelID, dataLen)
       decrypted := make([]byte, dataLen)
       xorSlice(data[1:], decrypted, dataLen, dataLen % 8)
       channelChan[chanId] <- decrypted
