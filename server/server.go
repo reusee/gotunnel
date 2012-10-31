@@ -69,11 +69,15 @@ func handlePacket(event *C.ENetEvent) {
         msg("[%d] connect fail\n", event.channelID, hostPort)
         return
       }
+      //defer conn.Close()
       msg("[%d] connected %s\n", event.channelID, hostPort)
       channelConn[chanId] = conn
 
       exit := make(chan bool)
-      go func() {
+      defer func() {
+        exit <- true
+      }()
+      go func() { // forward to target
         for {
           select {
           case <-exit:
@@ -83,10 +87,14 @@ func handlePacket(event *C.ENetEvent) {
           }
         }
       }()
+      // read from target and forward to client
       buf := make([]byte, 65535)
       for {
         n, err := conn.Read(buf)
         if err != nil {
+          data := []byte{2}
+          packet := C.enet_packet_create(unsafe.Pointer(C.CString(string(data))), C.size_t(1), C.ENET_PACKET_FLAG_RELIABLE)
+          C.enet_peer_send(event.peer, event.channelID, packet)
           break
         }
         msg("[%d] target > %d\n", event.channelID, n)
@@ -97,13 +105,6 @@ func handlePacket(event *C.ENetEvent) {
         packet := C.enet_packet_create(unsafe.Pointer(C.CString(string(data))), C.size_t(l), C.ENET_PACKET_FLAG_RELIABLE)
         C.enet_peer_send(event.peer, event.channelID, packet)
       }
-      defer func() {
-        conn.Close()
-        exit <- true
-        data := []byte{2}
-        packet := C.enet_packet_create(unsafe.Pointer(C.CString(string(data))), C.size_t(1), C.ENET_PACKET_FLAG_RELIABLE)
-        C.enet_peer_send(event.peer, event.channelID, packet)
-      }()
 
     case byte(1): // data packet
       dataLen := len(data) - 1
@@ -111,6 +112,9 @@ func handlePacket(event *C.ENetEvent) {
       decrypted := make([]byte, dataLen)
       xorSlice(data[1:], decrypted, dataLen, dataLen % 8)
       channelChan[chanId] <- decrypted
+
+    case byte(2): // client abort
+      //channelConn[chanId].Close()
   }
 }
 

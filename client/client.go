@@ -24,7 +24,6 @@ func init() {
   hasher := fnv.New64()
   hasher.Write([]byte(KEY))
   secret = hasher.Sum64()
-  msg("secret %d\n", secret)
 
   buf := new(bytes.Buffer)
   binary.Write(buf, binary.LittleEndian, secret)
@@ -109,15 +108,14 @@ func handleConnection(conn net.Conn) {
     } else if addrType == ADDR_TYPE_DOMAIN {
       hostPort = net.JoinHostPort(string(address), strconv.Itoa(int(port)))
     }
-    msg("hostPort %s\n", hostPort)
 
     channelId := <-idPool
     channelConn[channelId] = conn
     defer func() {
       idPool <- channelId
-      msg("return channel %d\n", channelId)
+      msg("[%d] leave channel\n", channelId)
     }()
-    msg("channel id %d\n", channelId)
+    msg("[%d] host %s\n", channelId, hostPort)
 
     writeAck(conn, REP_SUCCEED)
 
@@ -130,14 +128,17 @@ func handleConnection(conn net.Conn) {
     packet := C.enet_packet_create(unsafe.Pointer(C.CString(string(buf.Bytes()))), C.size_t(buf.Len()), C.ENET_PACKET_FLAG_RELIABLE)
     C.enet_peer_send(peer, channelId, packet)
 
-    buffer := make([]byte, 65535)
+    buffer := make([]byte, 65535) // forward client data to server
     for {
       n, err := conn.Read(buffer)
       if err != nil {
         conn.Close()
+        data := []byte{2}
+        packet := C.enet_packet_create(unsafe.Pointer(C.CString(string(data))), C.size_t(1), C.ENET_PACKET_FLAG_RELIABLE)
+        C.enet_peer_send(peer, channelId, packet)
         break
       }
-      msg("data len %d\n", n)
+      msg("[%d] client > %d\n", channelId, n)
       l = n + 1
       data := make([]byte, l)
       data[0] = byte(1)
