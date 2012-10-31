@@ -81,7 +81,6 @@ func handlePacket(event *C.ENetEvent) {
           case <-exit:
             break
           case data := <-channelChan[chanId]:
-            fmt.Printf("==> to send: %s <==\n", data[:32])
             conn.Write(data)
           }
         }
@@ -106,7 +105,7 @@ func handlePacket(event *C.ENetEvent) {
       packet := C.enet_packet_create(unsafe.Pointer(C.CString(string(data))), C.size_t(1), C.ENET_PACKET_FLAG_RELIABLE)
       C.enet_peer_send(event.peer, event.channelID, packet)
 
-    case byte(1):
+    case byte(1): // data packet
       dataLen := len(data) - 1
       fmt.Printf("receive data from chan %d len %d\n", chanId, dataLen)
       decrypted := make([]byte, dataLen)
