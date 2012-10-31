@@ -1,5 +1,8 @@
 package main
 
+// #cgo LDFLAGS: -lenet
+// #include <enet/enet.h>
+import "C"
 import (
   "net"
   "log"
@@ -9,6 +12,8 @@ import (
   "strconv"
   "hash/fnv"
   "bytes"
+  "unsafe"
+  "time"
 )
 
 var secret uint64
@@ -19,7 +24,7 @@ func init() {
   hasher := fnv.New64()
   hasher.Write([]byte(KEY))
   secret = hasher.Sum64()
-  fmt.Printf("secret %d\n", secret)
+  msg("secret %d\n", secret)
 
   buf := new(bytes.Buffer)
   binary.Write(buf, binary.LittleEndian, secret)
@@ -40,11 +45,11 @@ func main() {
   if err != nil {
     log.Fatal("listen error on port %s\n", PORT)
   }
-  fmt.Printf("listening on %s\n", PORT)
+  msg("listening on %s\n", PORT)
   for {
     conn, err := ln.Accept()
     if err != nil {
-      fmt.Printf("accept error %v\n", err)
+      msg("accept error %v\n", err)
       continue
     }
     go handleConnection(conn)
@@ -52,7 +57,7 @@ func main() {
 }
 
 func handleConnection(conn net.Conn) {
-  defer conn.Close()
+  //defer conn.Close()
   var ver, nMethods byte
 
   read(conn, &ver)
@@ -104,26 +109,42 @@ func handleConnection(conn net.Conn) {
     } else if addrType == ADDR_TYPE_DOMAIN {
       hostPort = net.JoinHostPort(string(address), strconv.Itoa(int(port)))
     }
-    fmt.Printf("hostPort %s\n", hostPort)
+    msg("hostPort %s\n", hostPort)
 
-    serverConn, err := net.Dial("tcp", SERVER)
-    if err != nil {
-      fmt.Printf("server connect fail %v\n", err)
-      writeAck(conn, REP_SERVER_FAILURE)
-      return
-    }
-    defer serverConn.Close()
+    channelId := <-idPool
+    channelConn[channelId] = conn
+    defer func() {
+      idPool <- channelId
+      msg("return channel %d\n", channelId)
+    }()
+    msg("channel id %d\n", channelId)
 
     writeAck(conn, REP_SUCCEED)
 
-    hostPortLen := len(hostPort)
-    write(serverConn, byte(hostPortLen))
-    encryptedHostPort := make([]byte, hostPortLen)
-    xorSlice([]byte(hostPort), encryptedHostPort, hostPortLen, hostPortLen % 8)
-    write(serverConn, encryptedHostPort)
+    buf := new(bytes.Buffer)
+    write(buf, byte(0))
+    l := len(hostPort)
+    encrypted := make([]byte, l)
+    xorSlice([]byte(hostPort), encrypted, l, l % 8)
+    write(buf, encrypted)
+    packet := C.enet_packet_create(unsafe.Pointer(C.CString(string(buf.Bytes()))), C.size_t(buf.Len()), C.ENET_PACKET_FLAG_RELIABLE)
+    C.enet_peer_send(peer, channelId, packet)
 
-    go io.Copy(conn, NewXorReader(serverConn, secret))
-    io.Copy(NewXorWriter(serverConn, secret), conn)
+    buffer := make([]byte, 65535)
+    for {
+      n, err := conn.Read(buffer)
+      if err != nil {
+        conn.Close()
+        break
+      }
+      msg("data len %d\n", n)
+      l = n + 1
+      data := make([]byte, l)
+      data[0] = byte(1)
+      xorSlice(buffer, data[1:], n, n % 8)
+      packet := C.enet_packet_create(unsafe.Pointer(C.CString(string(data))), C.size_t(l), C.ENET_PACKET_FLAG_RELIABLE)
+      C.enet_peer_send(peer, channelId, packet)
+    }
 
   case CMD_BIND:
   case CMD_UDP_ASSOCIATE:
@@ -148,4 +169,8 @@ func read(reader io.Reader, v interface{}) {
 
 func write(writer io.Writer, v interface{}) {
   binary.Write(writer, binary.BigEndian, v)
+}
+
+func msg(s string, vars ...interface{}) {
+  fmt.Printf("%v " + s, append([]interface{}{time.Now().Sub(startTime)}, vars...)...)
 }

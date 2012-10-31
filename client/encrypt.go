@@ -1,51 +1,9 @@
 package main
 
 import (
-  "io"
   "reflect"
   "unsafe"
 )
-
-func NewXorWriter(writer io.Writer, secret uint64) *Writer {
-  self := &Writer{
-    writer: writer,
-    keyIndex: 0,
-  }
-  return self
-}
-
-type Writer struct {
-  writer io.Writer
-  keyIndex int
-}
-
-func (self *Writer) Write(p []byte) (n int, err error) {
-  l := len(p)
-  buf := make([]byte, l)
-  self.keyIndex = xorSlice(p, buf, l, self.keyIndex)
-  return self.writer.Write(buf)
-}
-
-func NewXorReader(reader io.Reader, secret uint64) *Reader {
-  self := &Reader{
-    reader: reader,
-    keyIndex: 0,
-  }
-  return self
-}
-
-type Reader struct {
-  reader io.Reader
-  keyIndex int
-}
-
-func (self *Reader) Read(p []byte) (n int, err error) {
-  l := len(p)
-  buf := make([]byte, l)
-  n, err = self.reader.Read(buf)
-  self.keyIndex = xorSlice(buf, p, n, self.keyIndex)
-  return
-}
 
 func xorSlice(from []byte, to []byte, n int, keyIndex int) int {
   j := 0

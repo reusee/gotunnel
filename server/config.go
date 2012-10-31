@@ -1,6 +1,7 @@
 package main
 
 const (
-  PORT = ":38808"
   KEY = "abcdar"
+  CHANNELS = 128
+  HOST_PORT = 8888
 )
