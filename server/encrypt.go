@@ -6,7 +6,7 @@ import (
   "unsafe"
 )
 
-func NewXorWriter(writer io.Writer, secret uint64) *Writer {
+func NewXorWriter(writer io.Writer) *Writer {
   self := &Writer{
     writer: writer,
     keyIndex: 0,
@@ -26,7 +26,7 @@ func (self *Writer) Write(p []byte) (n int, err error) {
   return self.writer.Write(buf)
 }
 
-func NewXorReader(reader io.Reader, secret uint64) *Reader {
+func NewXorReader(reader io.Reader) *Reader {
   self := &Reader{
     reader: reader,
     keyIndex: 0,

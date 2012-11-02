@@ -9,11 +9,14 @@ import (
   "strconv"
   "hash/fnv"
   "bytes"
+  "sync/atomic"
+  "time"
 )
 
 var secret uint64
 var uint64Keys []uint64
 var byteKeys []byte
+var connCount int32
 
 func init() {
   hasher := fnv.New64()
@@ -33,6 +36,14 @@ func init() {
     keys = append(keys[1:], keys[0])
     buf = bytes.NewBuffer(keys)
   }
+
+  go func() {
+    ticker := time.NewTimer(time.Second * 1)
+    for {
+      <-ticker.C
+      fmt.Printf("connections %d\n", connCount)
+    }
+  }()
 }
 
 func main() {
@@ -52,6 +63,7 @@ func main() {
 }
 
 func handleConnection(conn net.Conn) {
+  atomic.AddInt32(&connCount, int32(1))
   defer conn.Close()
   var ver, nMethods byte
 
@@ -122,8 +134,8 @@ func handleConnection(conn net.Conn) {
     xorSlice([]byte(hostPort), encryptedHostPort, hostPortLen, hostPortLen % 8)
     write(serverConn, encryptedHostPort)
 
-    go io.Copy(conn, NewXorReader(serverConn, secret))
-    io.Copy(NewXorWriter(serverConn, secret), conn)
+    go io.Copy(conn, NewXorReader(serverConn))
+    io.Copy(NewXorWriter(serverConn), conn)
 
   case CMD_BIND:
   case CMD_UDP_ASSOCIATE:
@@ -131,6 +143,8 @@ func handleConnection(conn net.Conn) {
     writeAck(conn, REP_COMMAND_NOT_SUPPORTED)
     return
   }
+
+  atomic.AddInt32(&connCount, int32(-1))
 }
 
 func writeAck(conn net.Conn, reply byte) {

@@ -80,8 +80,8 @@ func handleConnection(conn net.Conn) {
   }
   defer targetConn.Close()
 
-  go io.Copy(NewXorWriter(conn, secret), targetConn)
-  io.Copy(targetConn, NewXorReader(conn, secret))
+  go io.Copy(NewXorWriter(conn), targetConn)
+  io.Copy(targetConn, NewXorReader(conn))
   atomic.AddInt32(&connCount, int32(-1))
 }
 
