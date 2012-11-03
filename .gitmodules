@@ -1,0 +1,3 @@
+[submodule "dnet"]
+	path = dnet
+	url = git@github.com:reusee/dnet.git
