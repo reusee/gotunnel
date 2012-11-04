@@ -1,16 +1,17 @@
 package main
 
 import (
-  "net"
-  "log"
-  "fmt"
-  "encoding/binary"
-  "io"
-  "strconv"
-  "hash/fnv"
   "bytes"
+  "encoding/binary"
+  "flag"
+  "fmt"
+  "hash/fnv"
+  "io"
+  "log"
+  "net"
+  "os"
+  "strconv"
   "sync/atomic"
-  "time"
 )
 
 var secret uint64
@@ -18,9 +19,27 @@ var uint64Keys []uint64
 var byteKeys []byte
 var connCount int32
 
+var gKey, gPort, gServer string
+
+func usage() {
+  flag.PrintDefaults()
+  os.Exit(2)
+}
+
+func parseArgs() {
+  flag.StringVar(&gKey, "key", "", "key for encryption")
+  flag.StringVar(&gPort, "port", "127.0.0.1:8809", "listen on addr:port")
+  flag.StringVar(&gServer, "server", "", "connect to server addr:port")
+  flag.Parse()
+
+  if gKey == "" || gPort == "" || gServer == "" { usage() }
+}
+
 func init() {
+  parseArgs()
+
   hasher := fnv.New64()
-  hasher.Write([]byte(KEY))
+  hasher.Write([]byte(gKey))
   secret = hasher.Sum64()
   fmt.Printf("secret %d\n", secret)
 
@@ -36,22 +55,14 @@ func init() {
     keys = append(keys[1:], keys[0])
     buf = bytes.NewBuffer(keys)
   }
-
-  go func() {
-    ticker := time.NewTimer(time.Second * 1)
-    for {
-      <-ticker.C
-      fmt.Printf("connections %d\n", connCount)
-    }
-  }()
 }
 
 func main() {
-  ln, err := net.Listen("tcp", PORT)
+  ln, err := net.Listen("tcp", gPort)
   if err != nil {
-    log.Fatal("listen error on port %s\n", PORT)
+    log.Fatal("listen error on port %s\n", gPort)
   }
-  fmt.Printf("listening on %s\n", PORT)
+  fmt.Printf("listening on %s\n", gPort)
   for {
     conn, err := ln.Accept()
     if err != nil {
@@ -118,7 +129,7 @@ func handleConnection(conn net.Conn) {
     }
     fmt.Printf("hostPort %s\n", hostPort)
 
-    serverConn, err := net.Dial("tcp", SERVER)
+    serverConn, err := net.Dial("tcp", gServer)
     if err != nil {
       fmt.Printf("server connect fail %v\n", err)
       writeAck(conn, REP_SERVER_FAILURE)
