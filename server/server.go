@@ -9,7 +9,6 @@ import (
   "hash/fnv"
   "bytes"
   "sync/atomic"
-  "time"
 )
 
 var secret uint64
@@ -36,14 +35,6 @@ func init() {
     keys = append(keys[1:], keys[0])
     buf = bytes.NewBuffer(keys)
   }
-
-  go func() {
-    ticker := time.NewTicker(time.Second * 1)
-    for {
-      <-ticker.C
-      fmt.Printf("connections %d\n", connCount)
-    }
-  }()
 }
 
 func main() {

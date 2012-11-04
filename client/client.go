@@ -55,14 +55,6 @@ func init() {
     keys = append(keys[1:], keys[0])
     buf = bytes.NewBuffer(keys)
   }
-
-  go func() {
-    ticker := time.NewTimer(time.Second * 1)
-    for {
-      <-ticker.C
-      fmt.Printf("connections %d\n", connCount)
-    }
-  }()
 }
 
 func main() {
