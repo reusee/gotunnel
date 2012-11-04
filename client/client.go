@@ -98,11 +98,16 @@ func handleConnection(conn net.Conn) {
     }
     fmt.Printf("hostPort %s %v\n", hostPort, ret)
 
+    end := make(chan bool)
     go func() {
       for {
-        data := <-session.Data
-        conn.Write(data)
-        fmt.Printf("received %d bytes\n", len(data))
+        select {
+        case data := <-session.Data:
+          conn.Write(data)
+          fmt.Printf("received %d bytes\n", len(data))
+        case <-end:
+          break
+        }
       }
     }()
 
@@ -110,6 +115,8 @@ func handleConnection(conn net.Conn) {
     for {
       n, err := conn.Read(buf)
       if err != nil {
+        session.AbortRead()
+        end <- true
         return
       }
       session.Send(buf[:n])
