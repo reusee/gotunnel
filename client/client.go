@@ -14,7 +14,7 @@ var client *gnet.Client
 
 func main() {
   var err error
-  client, err = gnet.NewClient(SERVER, KEY, 64)
+  client, err = gnet.NewClient(SERVER, KEY, 128)
   if err != nil {
     log.Fatal(err)
   }
