@@ -1,7 +1,3 @@
-[submodule "dnet"]
-	path = dnet
-	url = git@github.com:reusee/dnet.git
-  ignore = dirty
 [submodule "gnet"]
 	path = gnet
 	url = git@github.com:reusee/gnet.git

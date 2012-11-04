@@ -7,46 +7,18 @@ import (
   "encoding/binary"
   "io"
   "strconv"
-  "hash/fnv"
-  "bytes"
-  "sync/atomic"
-  "time"
+  gnet "../gnet"
 )
 
-var secret uint64
-var uint64Keys []uint64
-var byteKeys []byte
-var connCount int32
-
-func init() {
-  hasher := fnv.New64()
-  hasher.Write([]byte(KEY))
-  secret = hasher.Sum64()
-  fmt.Printf("secret %d\n", secret)
-
-  buf := new(bytes.Buffer)
-  binary.Write(buf, binary.LittleEndian, secret)
-  byteKeys = buf.Bytes()
-
-  keys := byteKeys[:]
-  for i := 0; i < 8; i++ {
-    var key uint64
-    binary.Read(buf, binary.LittleEndian, &key)
-    uint64Keys = append(uint64Keys, key)
-    keys = append(keys[1:], keys[0])
-    buf = bytes.NewBuffer(keys)
-  }
-
-  go func() {
-    ticker := time.NewTimer(time.Second * 1)
-    for {
-      <-ticker.C
-      fmt.Printf("connections %d\n", connCount)
-    }
-  }()
-}
+var client *gnet.Client
 
 func main() {
+  var err error
+  client, err = gnet.NewClient(SERVER, KEY, 64)
+  if err != nil {
+    log.Fatal(err)
+  }
+
   ln, err := net.Listen("tcp", PORT)
   if err != nil {
     log.Fatal("listen error on port %s\n", PORT)
@@ -63,7 +35,6 @@ func main() {
 }
 
 func handleConnection(conn net.Conn) {
-  atomic.AddInt32(&connCount, int32(1))
   defer conn.Close()
   var ver, nMethods byte
 
@@ -116,26 +87,33 @@ func handleConnection(conn net.Conn) {
     } else if addrType == ADDR_TYPE_DOMAIN {
       hostPort = net.JoinHostPort(string(address), strconv.Itoa(int(port)))
     }
-    fmt.Printf("hostPort %s\n", hostPort)
-
-    serverConn, err := net.Dial("tcp", SERVER)
-    if err != nil {
-      fmt.Printf("server connect fail %v\n", err)
-      writeAck(conn, REP_SERVER_FAILURE)
-      return
-    }
-    defer serverConn.Close()
 
     writeAck(conn, REP_SUCCEED)
 
-    hostPortLen := len(hostPort)
-    write(serverConn, byte(hostPortLen))
-    encryptedHostPort := make([]byte, hostPortLen)
-    xorSlice([]byte(hostPort), encryptedHostPort, hostPortLen, hostPortLen % 8)
-    write(serverConn, encryptedHostPort)
+    session := client.NewSession()
+    session.Send([]byte(hostPort))
+    ret := (<-session.Data)[0]
+    if ret != byte(1) {
+      return
+    }
+    fmt.Printf("hostPort %s %v\n", hostPort, ret)
 
-    go io.Copy(conn, NewXorReader(serverConn))
-    io.Copy(NewXorWriter(serverConn), conn)
+    go func() {
+      for {
+        data := <-session.Data
+        conn.Write(data)
+        fmt.Printf("received %d bytes\n", len(data))
+      }
+    }()
+
+    buf := make([]byte, 65535)
+    for {
+      n, err := conn.Read(buf)
+      if err != nil {
+        return
+      }
+      session.Send(buf[:n])
+    }
 
   case CMD_BIND:
   case CMD_UDP_ASSOCIATE:
@@ -143,8 +121,6 @@ func handleConnection(conn net.Conn) {
     writeAck(conn, REP_COMMAND_NOT_SUPPORTED)
     return
   }
-
-  atomic.AddInt32(&connCount, int32(-1))
 }
 
 func writeAck(conn net.Conn, reply byte) {
@@ -162,4 +138,7 @@ func read(reader io.Reader, v interface{}) {
 
 func write(writer io.Writer, v interface{}) {
   binary.Write(writer, binary.BigEndian, v)
+}
+
+func msg(f string, vars ...interface{}) {
 }
