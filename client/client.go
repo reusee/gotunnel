@@ -106,7 +106,7 @@ func handleConnection(conn net.Conn) {
           conn.Write(data)
           fmt.Printf("received %d bytes\n", len(data))
         case <-end:
-          break
+          return
         }
       }
     }()
@@ -115,7 +115,6 @@ func handleConnection(conn net.Conn) {
     for {
       n, err := conn.Read(buf)
       if err != nil {
-        session.AbortRead()
         end <- true
         return
       }

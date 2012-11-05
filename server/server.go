@@ -49,7 +49,7 @@ func handleSession(session *gnet.Session) {
     case data := <-session.Data:
       conn.Write(data)
     case <-end:
-      break
+      return
     }
   }
 }
