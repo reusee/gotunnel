@@ -104,7 +104,6 @@ func handleConnection(conn net.Conn) {
         select {
         case data := <-session.Data:
           conn.Write(data)
-          fmt.Printf("received %d bytes\n", len(data))
         case <-end:
           return
         }

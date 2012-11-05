@@ -40,7 +40,6 @@ func handleSession(session *gnet.Session) {
         break
       }
       session.Send(buf[:n])
-      fmt.Printf("send %d bytes\n", n)
     }
   }()
 
