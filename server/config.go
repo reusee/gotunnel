@@ -2,5 +2,5 @@ package main
 
 const (
   PORT = ":38808"
-  KEY = "abcdar"
+  KEY = "abcd1234qwer7890"
 )
