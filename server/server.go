@@ -32,7 +32,7 @@ func handleSession(session *gnet.Session) {
 
   end := make(chan bool)
   go func() {
-    buf := make([]byte, 32768)
+    buf := make([]byte, 2048)
     for {
       n, err := conn.Read(buf)
       if err != nil {
