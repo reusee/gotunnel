@@ -8,9 +8,15 @@ import (
   "io"
   "strconv"
   gnet "../gnet"
+  "sync/atomic"
+  "time"
 )
 
-var client *gnet.Client
+var (
+  client *gnet.Client
+  sessionCounter int64
+  connectionCounter int64
+)
 
 func main() {
   var err error
@@ -24,6 +30,15 @@ func main() {
     log.Fatal("listen error on port %s\n", PORT)
   }
   fmt.Printf("listening on %s\n", PORT)
+
+  go func() {
+    heartBeat := time.NewTicker(time.Second * 1)
+    for {
+      <-heartBeat.C
+      fmt.Printf("gotunnel: %d connections %d active sessions\n", connectionCounter, sessionCounter)
+    }
+  }()
+
   for {
     conn, err := ln.Accept()
     if err != nil {
@@ -35,7 +50,12 @@ func main() {
 }
 
 func handleConnection(conn net.Conn) {
-  defer conn.Close()
+  atomic.AddInt64(&connectionCounter, int64(1))
+  defer func() {
+    conn.Close()
+    atomic.AddInt64(&connectionCounter, int64(-1))
+  }()
+
   var ver, nMethods byte
 
   read(conn, &ver)
@@ -91,6 +111,7 @@ func handleConnection(conn net.Conn) {
     writeAck(conn, REP_SUCCEED)
 
     session := client.NewSession()
+    atomic.AddInt64(&sessionCounter, int64(1))
     session.Send([]byte(hostPort))
     ret := (<-session.Data)[0]
     if ret != byte(1) {
@@ -98,24 +119,28 @@ func handleConnection(conn net.Conn) {
     }
     fmt.Printf("hostPort %s %v\n", hostPort, ret)
 
-    end := make(chan bool)
+    // send to client
     go func() {
       for {
         select {
         case data := <-session.Data:
           conn.Write(data)
-        case <-end:
-          return
+        case state := <-session.State:
+          if state == gnet.STATE_FINISH_SEND {
+            atomic.AddInt64(&sessionCounter, int64(-1))
+            return
+          }
         }
       }
     }()
 
+    // read from client and send to server
     buf := make([]byte, 4096)
     for {
       n, err := conn.Read(buf)
       if err != nil {
-        end <- true
-        return
+        session.FinishSend()
+        break
       }
       session.Send(buf[:n])
     }
