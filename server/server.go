@@ -52,6 +52,7 @@ func handleSession(session *gnet.Session) {
   }()
 
   // read from client and send to target
+  clientAbort := false
   go func() {
     for {
       select {
@@ -61,6 +62,9 @@ func handleSession(session *gnet.Session) {
         if state == gnet.STATE_FINISH_SEND {
           atomic.AddInt64(&sessionCounter, int64(-1))
           return
+        } else if state == gnet.STATE_ABORT_READ {
+          session.Close()
+          clientAbort = true
         }
       }
     }
@@ -72,6 +76,9 @@ func handleSession(session *gnet.Session) {
     n, err := conn.Read(buf)
     if err != nil {
       session.FinishSend()
+      break
+    }
+    if clientAbort {
       break
     }
     session.Send(buf[:n])

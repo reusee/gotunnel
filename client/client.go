@@ -120,16 +120,14 @@ func handleConnection(conn net.Conn) {
     fmt.Printf("hostPort %s %v\n", hostPort, ret)
 
     // send to client
+    abort := make(chan bool)
     go func() {
       for {
         select {
         case data := <-session.Data:
           conn.Write(data)
-        case state := <-session.State:
-          if state == gnet.STATE_FINISH_SEND {
-            atomic.AddInt64(&sessionCounter, int64(-1))
-            return
-          }
+        case <-abort:
+          return
         }
       }
     }()
@@ -139,7 +137,9 @@ func handleConnection(conn net.Conn) {
     for {
       n, err := conn.Read(buf)
       if err != nil {
-        session.FinishSend()
+        session.Abort()
+        atomic.AddInt64(&sessionCounter, int64(-1))
+        abort <- true
         break
       }
       session.Send(buf[:n])
