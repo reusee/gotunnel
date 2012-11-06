@@ -110,7 +110,7 @@ func handleConnection(conn net.Conn) {
       }
     }()
 
-    buf := make([]byte, 32768)
+    buf := make([]byte, 4096)
     for {
       n, err := conn.Read(buf)
       if err != nil {
