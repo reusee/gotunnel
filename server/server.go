@@ -49,36 +49,40 @@ func handleSession(session *gnet.Session) {
     atomic.AddInt64(&connectionCounter, int64(-1))
   }()
 
-  // read from client and send to target
-  clientAbort := false
+  fromConn := make(chan []byte)
   go func() {
     for {
-      msg := <-session.Message
-      switch msg.Tag {
-      case gnet.DATA:
-        conn.Write(msg.Data)
-      case gnet.STATE:
-        if msg.State == gnet.STATE_FINISH_SEND { // client finish send
-          return
-        } else if msg.State == gnet.STATE_ABORT_READ || msg.State == gnet.STATE_ABORT_SEND {
-          session.Abort()
-          clientAbort = true
-        }
+      buf := make([]byte, 4096)
+      n, err := conn.Read(buf)
+      fmt.Printf("conn read %d\n", n)
+      if err != nil {
+        fmt.Printf("err %v\n", err)
+        fromConn <- nil
+        return
       }
+      fromConn <- buf[:n]
     }
   }()
 
-  // read from target
-  buf := make([]byte, 4096)
   for {
-    n, err := conn.Read(buf)
-    if err != nil {
-      session.FinishSend()
-      break
+    select {
+    case msg := <-session.Message:
+      if msg.Tag == gnet.DATA {
+        fmt.Printf("receive %d\n", len(msg.Data))
+        conn.Write(msg.Data)
+      } else if msg.Tag == gnet.STATE && msg.State == gnet.STATE_STOP {
+        fmt.Printf("stop\n")
+        return
+      }
+    case data := <-fromConn:
+      if data == nil {
+        fmt.Printf("finish send\n")
+        session.FinishSend()
+      } else {
+        fmt.Printf("send %d\n", len(data))
+        session.Send(data)
+      }
     }
-    if clientAbort {
-      break
-    }
-    session.Send(buf[:n])
   }
+
 }

@@ -117,29 +117,40 @@ func handleConnection(conn net.Conn) {
     }
     fmt.Printf("hostPort %s %v\n", hostPort, ret)
 
-    // send to client
-    abort := make(chan struct{})
+    fromConn := make(chan []byte)
     go func() {
       for {
-        select {
-        case msg := <-session.Message:
-          conn.Write(msg.Data)
-        case <-abort:
+        buf := make([]byte, 4096)
+        n, err := conn.Read(buf)
+        if err != nil {
+          fmt.Printf("conn err %v\n", err)
+          fromConn <- nil
           return
         }
+        fromConn <- buf[:n]
       }
     }()
 
-    // read from client and send to server
-    buf := make([]byte, 4096)
     for {
-      n, err := conn.Read(buf)
-      if err != nil {
-        session.Abort()
-        close(abort)
-        break
+      select {
+      case msg := <-session.Message:
+        if msg.Tag == gnet.DATA {
+          fmt.Printf("received %d\n", len(msg.Data))
+          n, err := conn.Write(msg.Data)
+          fmt.Printf("%v write %d to client\n", err, n)
+        } else if msg.Tag == gnet.STATE && msg.State == gnet.STATE_STOP {
+          fmt.Printf("stop\n")
+          return
+        }
+      case data := <-fromConn:
+        if data == nil {
+          fmt.Printf("finish send\n")
+          session.FinishSend()
+        } else {
+          fmt.Printf("send %d\n", len(data))
+          session.Send(data)
+        }
       }
-      session.Send(buf[:n])
     }
 
   case CMD_BIND:
