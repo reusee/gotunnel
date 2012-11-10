@@ -31,16 +31,22 @@ func main() {
   fmt.Printf("listening on %s\n", PORT)
 
   go func() {
-    heartBeat := time.NewTicker(time.Second * 1)
+    heartBeat := time.NewTicker(time.Second * 5)
     for {
       <-heartBeat.C
-      fmt.Printf("gotunnel: %d connections\n", connectionCounter)
+      if client.Closed {
+        ln.Close()
+        return
+      }
     }
   }()
 
   for {
     conn, err := ln.Accept()
     if err != nil {
+      if client.Closed {
+        return
+      }
       fmt.Printf("accept error %v\n", err)
       continue
     }
@@ -123,7 +129,6 @@ func handleConnection(conn net.Conn) {
         buf := make([]byte, 4096)
         n, err := conn.Read(buf)
         if err != nil {
-          fmt.Printf("conn err %v\n", err)
           fromConn <- nil
           return
         }
@@ -135,21 +140,17 @@ func handleConnection(conn net.Conn) {
       select {
       case msg := <-session.Message:
         if msg.Tag == gnet.DATA {
-          fmt.Printf("received %d\n", len(msg.Data))
           if _, err := conn.Write(msg.Data); err != nil {
             session.FinishRead()
             return
           }
         } else if msg.Tag == gnet.STATE && msg.State == gnet.STATE_STOP {
-          fmt.Printf("stop\n")
           return
         }
       case data := <-fromConn:
         if data == nil {
-          fmt.Printf("finish send\n")
           session.FinishSend()
         } else {
-          fmt.Printf("send %d\n", len(data))
           session.Send(data)
         }
       }

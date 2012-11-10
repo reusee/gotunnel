@@ -5,7 +5,6 @@ import (
   "log"
   "fmt"
   "net"
-  "time"
   "sync/atomic"
 )
 
@@ -18,14 +17,7 @@ func main() {
   if err != nil {
     log.Fatal(err)
   }
-
-  go func() {
-    heartBeat := time.NewTicker(time.Second * 1)
-    for {
-      <-heartBeat.C
-      fmt.Printf("gotunnel: %d connections\n", connectionCounter)
-    }
-  }()
+  fmt.Printf("listening on %s\n", PORT)
 
   for {
     session := <-server.New
@@ -54,9 +46,7 @@ func handleSession(session *gnet.Session) {
     for {
       buf := make([]byte, 4096)
       n, err := conn.Read(buf)
-      fmt.Printf("conn read %d\n", n)
       if err != nil {
-        fmt.Printf("err %v\n", err)
         fromConn <- nil
         return
       }
@@ -68,21 +58,17 @@ func handleSession(session *gnet.Session) {
     select {
     case msg := <-session.Message:
       if msg.Tag == gnet.DATA {
-        fmt.Printf("receive %d\n", len(msg.Data))
         if _, err := conn.Write(msg.Data); err != nil {
           session.FinishRead()
           return
         }
       } else if msg.Tag == gnet.STATE && msg.State == gnet.STATE_STOP {
-        fmt.Printf("stop\n")
         return
       }
     case data := <-fromConn:
       if data == nil {
-        fmt.Printf("finish send\n")
         session.FinishSend()
       } else {
-        fmt.Printf("send %d\n", len(data))
         session.Send(data)
       }
     }
