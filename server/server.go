@@ -69,7 +69,10 @@ func handleSession(session *gnet.Session) {
     case msg := <-session.Message:
       if msg.Tag == gnet.DATA {
         fmt.Printf("receive %d\n", len(msg.Data))
-        conn.Write(msg.Data)
+        if _, err := conn.Write(msg.Data); err != nil {
+          session.FinishRead()
+          return
+        }
       } else if msg.Tag == gnet.STATE && msg.State == gnet.STATE_STOP {
         fmt.Printf("stop\n")
         return
