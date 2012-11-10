@@ -10,7 +10,6 @@ import (
 )
 
 var (
-  sessionCounter int64
   connectionCounter int64
 )
 
@@ -24,19 +23,18 @@ func main() {
     heartBeat := time.NewTicker(time.Second * 1)
     for {
       <-heartBeat.C
-      fmt.Printf("gotunnel: %d connections %d active sessions\n", connectionCounter, sessionCounter)
+      fmt.Printf("gotunnel: %d connections\n", connectionCounter)
     }
   }()
 
   for {
     session := <-server.New
-    atomic.AddInt64(&sessionCounter, int64(1))
     go handleSession(session)
   }
 }
 
 func handleSession(session *gnet.Session) {
-  hostPort := string(<-session.Data)
+  hostPort := string((<-session.Message).Data)
   fmt.Printf("hostPort: %s\n", hostPort)
   conn, err := net.Dial("tcp", hostPort)
   atomic.AddInt64(&connectionCounter, int64(1))
@@ -55,15 +53,15 @@ func handleSession(session *gnet.Session) {
   clientAbort := false
   go func() {
     for {
-      select {
-      case data := <-session.Data:
-        conn.Write(data)
-      case state := <-session.State:
-        if state == gnet.STATE_FINISH_SEND {
-          atomic.AddInt64(&sessionCounter, int64(-1))
+      msg := <-session.Message
+      switch msg.Tag {
+      case gnet.DATA:
+        conn.Write(msg.Data)
+      case gnet.STATE:
+        if msg.State == gnet.STATE_FINISH_SEND { // client finish send
           return
-        } else if state == gnet.STATE_ABORT_READ {
-          session.Close()
+        } else if msg.State == gnet.STATE_ABORT_READ || msg.State == gnet.STATE_ABORT_SEND {
+          session.Abort()
           clientAbort = true
         }
       }

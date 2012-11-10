@@ -14,13 +14,12 @@ import (
 
 var (
   client *gnet.Client
-  sessionCounter int64
   connectionCounter int64
 )
 
 func main() {
   var err error
-  client, err = gnet.NewClient(SERVER, KEY, 128)
+  client, err = gnet.NewClient(SERVER, KEY, 16)
   if err != nil {
     log.Fatal(err)
   }
@@ -35,7 +34,7 @@ func main() {
     heartBeat := time.NewTicker(time.Second * 1)
     for {
       <-heartBeat.C
-      fmt.Printf("gotunnel: %d connections %d active sessions\n", connectionCounter, sessionCounter)
+      fmt.Printf("gotunnel: %d connections\n", connectionCounter)
     }
   }()
 
@@ -111,21 +110,20 @@ func handleConnection(conn net.Conn) {
     writeAck(conn, REP_SUCCEED)
 
     session := client.NewSession()
-    atomic.AddInt64(&sessionCounter, int64(1))
     session.Send([]byte(hostPort))
-    ret := (<-session.Data)[0]
+    ret := ((<-session.Message).Data)[0]
     if ret != byte(1) {
       return
     }
     fmt.Printf("hostPort %s %v\n", hostPort, ret)
 
     // send to client
-    abort := make(chan bool)
+    abort := make(chan struct{})
     go func() {
       for {
         select {
-        case data := <-session.Data:
-          conn.Write(data)
+        case msg := <-session.Message:
+          conn.Write(msg.Data)
         case <-abort:
           return
         }
@@ -138,8 +136,7 @@ func handleConnection(conn net.Conn) {
       n, err := conn.Read(buf)
       if err != nil {
         session.Abort()
-        atomic.AddInt64(&sessionCounter, int64(-1))
-        abort <- true
+        close(abort)
         break
       }
       session.Send(buf[:n])
