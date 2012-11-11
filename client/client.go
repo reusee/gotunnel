@@ -117,11 +117,15 @@ func handleConnection(conn net.Conn) {
 
     session := client.NewSession()
     session.Send([]byte(hostPort))
-    ret := ((<-session.Message).Data)[0]
-    if ret != byte(1) {
+    msg := <-session.Message
+    if msg.Tag != gnet.DATA {
       return
     }
-    fmt.Printf("hostPort %s %v\n", hostPort, ret)
+    retCode := msg.Data[0]
+    if retCode != byte(1) {
+      return
+    }
+    fmt.Printf("hostPort %s\n", hostPort)
 
     fromConn := make(chan []byte)
     go func() {
