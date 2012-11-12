@@ -34,10 +34,14 @@ func main() {
     heartBeat := time.NewTicker(time.Second * 5)
     for {
       <-heartBeat.C
+
       if client.Closed {
         ln.Close()
         return
       }
+
+      fmt.Printf("sent %d bytes, read %d bytes\n", client.BytesSent, client.BytesRead)
+
     }
   }()
 
