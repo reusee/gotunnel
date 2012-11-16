@@ -5,16 +5,11 @@ import (
   "log"
   "fmt"
   "net"
-  "sync/atomic"
   "runtime"
   "time"
 )
 
 const LIMIT_FACTOR = 256
-
-var (
-  connectionCounter int64
-)
 
 func main() {
   server, err := gnet.NewServer(PORT, KEY)
@@ -41,38 +36,38 @@ func main() {
 
 func handleSession(session *gnet.Session) {
   var hostPort string
+
   select {
   case msg := <-session.Message:
     hostPort = string(msg.Data)
   case <-session.Stopped:
     return
   }
+
   fmt.Printf("hostPort: %s\n", hostPort)
-  conn, err := net.Dial("tcp", hostPort)
-  atomic.AddInt64(&connectionCounter, int64(1))
+  addr, err := net.ResolveTCPAddr("tcp", hostPort)
+  if err != nil {
+    return
+  }
+  conn, err := net.DialTCP("tcp", nil, addr)
   if err != nil {
     session.Send([]byte{0})
     return
   } else {
     session.Send([]byte{1})
   }
+  defer conn.Close()
 
-  fromConn := make(chan []byte)
-  closed := false
   go func() {
+    buf := make([]byte, 4096)
     for {
-      buf := make([]byte, 4096)
-      delta := session.BytesSent - session.RemoteBytesRead
-      sleep := time.Duration(delta * 1000 / (LIMIT_FACTOR * 1024 * 1024)) * time.Millisecond
-      time.Sleep(sleep)
       n, err := conn.Read(buf)
-      if err != nil {
-        if !closed {
-          fromConn <- nil
-        }
+      if err != nil { // target close send
+        conn.CloseRead()
+        session.FinishSend()
         return
       }
-      fromConn <- buf[:n]
+      session.Send(buf[:n])
     }
   }()
 
@@ -80,35 +75,17 @@ func handleSession(session *gnet.Session) {
   for {
     select {
     case msg := <-session.Message:
-      if msg.Tag == gnet.DATA {
-        if _, err := conn.Write(msg.Data); err != nil {
+      switch msg.Tag {
+      case gnet.DATA:
+        conn.Write(msg.Data)
+      case gnet.STATE:
+        if msg.State == gnet.STATE_FINISH_SEND {
+          conn.CloseWrite()
           session.FinishRead()
-          break LOOP
         }
-      } else if msg.Tag == gnet.STATE && msg.State == gnet.STATE_STOP {
-        break LOOP
-      }
-    case data := <-fromConn:
-      if data == nil {
-        session.FinishSend()
-      } else {
-        session.Send(data)
       }
     case <-session.Stopped:
       break LOOP
-    }
-  }
-
-  closed = true
-  conn.Close()
-  atomic.AddInt64(&connectionCounter, int64(-1))
-  CLEAR:
-  for {
-    select {
-    case <-fromConn:
-      continue CLEAR
-    default:
-      break CLEAR
     }
   }
 

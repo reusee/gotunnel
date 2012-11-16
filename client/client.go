@@ -8,13 +8,12 @@ import (
   "io"
   "strconv"
   gnet "../gnet"
-  "sync/atomic"
   "time"
+  "runtime"
 )
 
 var (
   client *gnet.Client
-  connectionCounter int64
 )
 
 func main() {
@@ -24,7 +23,11 @@ func main() {
     log.Fatal(err)
   }
 
-  ln, err := net.Listen("tcp", PORT)
+  addr, err := net.ResolveTCPAddr("tcp", PORT)
+  if err != nil {
+    log.Fatal(err)
+  }
+  ln, err := net.ListenTCP("tcp", addr)
   if err != nil {
     log.Fatal("listen error on port %s\n", PORT)
   }
@@ -40,13 +43,16 @@ func main() {
         return
       }
 
-      fmt.Printf("sent %d bytes, read %d bytes\n", client.BytesSent, client.BytesRead)
+      fmt.Printf("gotunnel client: sent %d bytes, read %d bytes, %d goroutines\n",
+        client.BytesSent,
+        client.BytesRead,
+        runtime.NumGoroutine())
 
     }
   }()
 
   for {
-    conn, err := ln.Accept()
+    conn, err := ln.AcceptTCP()
     if err != nil {
       if client.Closed {
         return
@@ -58,13 +64,8 @@ func main() {
   }
 }
 
-func handleConnection(conn net.Conn) {
-  atomic.AddInt64(&connectionCounter, int64(1))
-  defer func() {
-    conn.Close()
-    atomic.AddInt64(&connectionCounter, int64(-1))
-  }()
-
+func handleConnection(conn *net.TCPConn) {
+  defer conn.Close()
   var ver, nMethods byte
 
   read(conn, &ver)
@@ -129,38 +130,35 @@ func handleConnection(conn net.Conn) {
     if retCode != byte(1) {
       return
     }
-    fmt.Printf("hostPort %s\n", hostPort)
 
-    fromConn := make(chan []byte)
     go func() {
+      buf := make([]byte, 4096)
       for {
-        buf := make([]byte, 4096)
         n, err := conn.Read(buf)
-        if err != nil {
-          fromConn <- nil
+        if err != nil { // client close send
+          conn.CloseRead()
+          session.FinishSend()
           return
         }
-        fromConn <- buf[:n]
+        session.Send(buf[:n])
       }
     }()
 
+    LOOP:
     for {
       select {
       case msg := <-session.Message:
-        if msg.Tag == gnet.DATA {
-          if _, err := conn.Write(msg.Data); err != nil {
+        switch msg.Tag {
+        case gnet.DATA:
+          conn.Write(msg.Data)
+        case gnet.STATE:
+          if msg.State == gnet.STATE_FINISH_SEND {
+            conn.CloseWrite()
             session.FinishRead()
-            return
           }
-        } else if msg.Tag == gnet.STATE && msg.State == gnet.STATE_STOP {
-          return
         }
-      case data := <-fromConn:
-        if data == nil {
-          session.FinishSend()
-        } else {
-          session.Send(data)
-        }
+      case <-session.Stopped:
+        break LOOP
       }
     }
 
