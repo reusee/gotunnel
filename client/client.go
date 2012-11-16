@@ -65,7 +65,6 @@ func main() {
 }
 
 func handleConnection(conn *net.TCPConn) {
-  defer conn.Close()
   var ver, nMethods byte
 
   read(conn, &ver)
@@ -122,12 +121,16 @@ func handleConnection(conn *net.TCPConn) {
 
     session := client.NewSession()
     session.Send([]byte(hostPort))
-    msg := <-session.Message
-    if msg.Tag != gnet.DATA {
-      return
-    }
-    retCode := msg.Data[0]
-    if retCode != byte(1) {
+    select {
+    case msg := <-session.Message:
+      if msg.Tag != gnet.DATA {
+        return
+      }
+      retCode := msg.Data[0]
+      if retCode != byte(1) {
+        return
+      }
+    case <-session.Stopped:
       return
     }
 

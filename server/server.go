@@ -56,7 +56,6 @@ func handleSession(session *gnet.Session) {
   } else {
     session.Send([]byte{1})
   }
-  defer conn.Close()
 
   go func() {
     buf := make([]byte, 4096)
