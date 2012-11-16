@@ -40,7 +40,13 @@ func main() {
 }
 
 func handleSession(session *gnet.Session) {
-  hostPort := string((<-session.Message).Data)
+  var hostPort string
+  select {
+  case msg := <-session.Message:
+    hostPort = string(msg.Data)
+  case <-session.Stopped:
+    return
+  }
   fmt.Printf("hostPort: %s\n", hostPort)
   conn, err := net.Dial("tcp", hostPort)
   atomic.AddInt64(&connectionCounter, int64(1))
@@ -50,12 +56,9 @@ func handleSession(session *gnet.Session) {
   } else {
     session.Send([]byte{1})
   }
-  defer func() {
-    conn.Close()
-    atomic.AddInt64(&connectionCounter, int64(-1))
-  }()
 
   fromConn := make(chan []byte)
+  closed := false
   go func() {
     for {
       buf := make([]byte, 4096)
@@ -64,23 +67,26 @@ func handleSession(session *gnet.Session) {
       time.Sleep(sleep)
       n, err := conn.Read(buf)
       if err != nil {
-        fromConn <- nil
+        if !closed {
+          fromConn <- nil
+        }
         return
       }
       fromConn <- buf[:n]
     }
   }()
 
+  LOOP:
   for {
     select {
     case msg := <-session.Message:
       if msg.Tag == gnet.DATA {
         if _, err := conn.Write(msg.Data); err != nil {
           session.FinishRead()
-          return
+          break LOOP
         }
       } else if msg.Tag == gnet.STATE && msg.State == gnet.STATE_STOP {
-        return
+        break LOOP
       }
     case data := <-fromConn:
       if data == nil {
@@ -88,6 +94,21 @@ func handleSession(session *gnet.Session) {
       } else {
         session.Send(data)
       }
+    case <-session.Stopped:
+      break LOOP
+    }
+  }
+
+  closed = true
+  conn.Close()
+  atomic.AddInt64(&connectionCounter, int64(-1))
+  CLEAR:
+  for {
+    select {
+    case <-fromConn:
+      continue CLEAR
+    default:
+      break CLEAR
     }
   }
 
