@@ -10,6 +10,8 @@ import (
   "time"
 )
 
+const LIMIT_FACTOR = 256
+
 var (
   connectionCounter int64
 )
@@ -57,6 +59,9 @@ func handleSession(session *gnet.Session) {
   go func() {
     for {
       buf := make([]byte, 4096)
+      delta := session.BytesSent - session.RemoteBytesRead
+      sleep := time.Duration(delta * 1000 / (LIMIT_FACTOR * 1024 * 1024)) * time.Millisecond
+      time.Sleep(sleep)
       n, err := conn.Read(buf)
       if err != nil {
         fromConn <- nil
