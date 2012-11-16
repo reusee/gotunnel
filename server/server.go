@@ -6,6 +6,8 @@ import (
   "fmt"
   "net"
   "sync/atomic"
+  "runtime"
+  "time"
 )
 
 var (
@@ -18,6 +20,16 @@ func main() {
     log.Fatal(err)
   }
   fmt.Printf("listening on %s\n", PORT)
+
+  go func() { // heartBeat
+    heartBeat := time.NewTicker(time.Second * 2)
+    for _ = range heartBeat.C {
+      fmt.Printf("sent %d bytes, read %d bytes, %d goroutines\n",
+        server.BytesSent,
+        server.BytesRead,
+        runtime.NumGoroutine())
+    }
+  }()
 
   for {
     session := <-server.New
