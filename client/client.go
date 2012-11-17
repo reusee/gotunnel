@@ -18,6 +18,8 @@ var (
 )
 
 func main() {
+  runtime.GOMAXPROCS(3)
+
   var err error
   client, err = gnet.NewClient(SERVER, KEY, 32)
   if err != nil {

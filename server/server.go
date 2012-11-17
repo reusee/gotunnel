@@ -12,6 +12,8 @@ import (
 const LIMIT_FACTOR = 256
 
 func main() {
+  runtime.GOMAXPROCS(3)
+
   server, err := gnet.NewServer(PORT, KEY)
   if err != nil {
     log.Fatal(err)
