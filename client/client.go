@@ -10,6 +10,7 @@ import (
   gnet "../gnet"
   "time"
   "runtime"
+  "math/rand"
 )
 
 var (
@@ -119,51 +120,35 @@ func handleConnection(conn *net.TCPConn) {
 
     writeAck(conn, REP_SUCCEED)
 
+    uid := rand.Int63()
+    info := func(f string, vars ...interface{}) {
+      if gnet.DEBUG {
+        fmt.Printf(fmt.Sprintf("%d %s\n", uid, f), vars...)
+      }
+    }
+
+    info("hostPort %s", hostPort)
+
     session := client.NewSession()
     session.Send([]byte(hostPort))
     select {
     case msg := <-session.Message:
       if msg.Tag != gnet.DATA {
+        info("get non-data msg")
         return
       }
       retCode := msg.Data[0]
       if retCode != byte(1) {
+        info("remote dial failed")
         return
       }
     case <-session.Stopped:
+      info("session stopped")
       return
     }
 
-    go func() {
-      buf := make([]byte, 4096)
-      for {
-        n, err := conn.Read(buf)
-        if err != nil { // client close send
-          conn.CloseRead()
-          session.FinishSend()
-          return
-        }
-        session.Send(buf[:n])
-      }
-    }()
-
-    LOOP:
-    for {
-      select {
-      case msg := <-session.Message:
-        switch msg.Tag {
-        case gnet.DATA:
-          conn.Write(msg.Data)
-        case gnet.STATE:
-          if msg.State == gnet.STATE_FINISH_SEND {
-            conn.CloseWrite()
-            session.FinishRead()
-          }
-        }
-      case <-session.Stopped:
-        break LOOP
-      }
-    }
+    // start forward
+    session.ProxyTCP(conn, 4096)
 
   case CMD_BIND:
   case CMD_UDP_ASSOCIATE:
