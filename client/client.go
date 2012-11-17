@@ -68,6 +68,7 @@ func main() {
 func handleConnection(conn *net.TCPConn) {
   var ver, nMethods byte
 
+  // handshake
   read(conn, &ver)
   read(conn, &nMethods)
   methods := make([]byte, nMethods)
@@ -79,6 +80,7 @@ func handleConnection(conn *net.TCPConn) {
     write(conn, METHOD_NOT_REQUIRED)
   }
 
+  // request
   var cmd, reserved, addrType byte
   read(conn, &ver)
   read(conn, &cmd)
@@ -108,54 +110,59 @@ func handleConnection(conn *net.TCPConn) {
   var port uint16
   read(conn, &port)
 
+  var hostPort string
+  if addrType == ADDR_TYPE_IP {
+    ip := net.IPv4(address[0], address[1], address[2], address[3])
+    hostPort = net.JoinHostPort(ip.String(), strconv.Itoa(int(port)))
+  } else if addrType == ADDR_TYPE_DOMAIN {
+    hostPort = net.JoinHostPort(string(address), strconv.Itoa(int(port)))
+  }
+
   switch cmd {
   case CMD_CONNECT:
-    var hostPort string
-    if addrType == ADDR_TYPE_IP {
-      ip := net.IPv4(address[0], address[1], address[2], address[3])
-      hostPort = net.JoinHostPort(ip.String(), strconv.Itoa(int(port)))
-    } else if addrType == ADDR_TYPE_DOMAIN {
-      hostPort = net.JoinHostPort(string(address), strconv.Itoa(int(port)))
-    }
-
-    writeAck(conn, REP_SUCCEED)
-
-    uid := rand.Int63()
-    info := func(f string, vars ...interface{}) {
-      if gnet.DEBUG {
-        fmt.Printf(fmt.Sprintf("%d %s\n", uid, f), vars...)
-      }
-    }
-
-    info("hostPort %s", hostPort)
-
-    session := client.NewSession()
-    session.Send([]byte(hostPort))
-    select {
-    case msg := <-session.Message:
-      if msg.Tag != gnet.DATA {
-        info("get non-data msg")
-        return
-      }
-      retCode := msg.Data[0]
-      if retCode != byte(1) {
-        info("remote dial failed")
-        return
-      }
-    case <-session.Stopped:
-      info("session stopped")
-      return
-    }
-
-    // start forward
-    session.ProxyTCP(conn, 4096)
-
+    handleConnect(hostPort, conn)
   case CMD_BIND:
+    writeAck(conn, REP_COMMAND_NOT_SUPPORTED)
   case CMD_UDP_ASSOCIATE:
+    writeAck(conn, REP_COMMAND_NOT_SUPPORTED)
   default:
     writeAck(conn, REP_COMMAND_NOT_SUPPORTED)
     return
   }
+}
+
+func handleConnect(hostPort string, conn *net.TCPConn) {
+  writeAck(conn, REP_SUCCEED)
+
+  uid := rand.Int63()
+  info := func(f string, vars ...interface{}) {
+    if gnet.DEBUG {
+      fmt.Printf(fmt.Sprintf("%d %s\n", uid, f), vars...)
+    }
+  }
+
+  info("hostPort %s", hostPort)
+
+  session := client.NewSession()
+  session.Send([]byte(hostPort))
+  select {
+  case msg := <-session.Message:
+    if msg.Tag != gnet.DATA {
+      info("get non-data msg")
+      return
+    }
+    retCode := msg.Data[0]
+    if retCode != byte(1) {
+      info("remote dial failed")
+      return
+    }
+  case <-session.Stopped:
+    info("session stopped")
+    return
+  }
+
+  // start forward
+  session.ProxyTCP(conn, 4096)
 }
 
 func writeAck(conn net.Conn, reply byte) {
