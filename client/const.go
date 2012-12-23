@@ -9,6 +9,7 @@ const (
   RESERVED = byte(0)
 
   ADDR_TYPE_IP = byte(1)
+  ADDR_TYPE_IPV6 = byte(4)
   ADDR_TYPE_DOMAIN = byte(3)
 
   CMD_CONNECT = byte(1)
