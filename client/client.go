@@ -94,7 +94,7 @@ func handleConnection(conn *net.TCPConn) {
   if reserved != RESERVED {
     return
   }
-  if addrType != ADDR_TYPE_IP && addrType != ADDR_TYPE_DOMAIN {
+  if addrType != ADDR_TYPE_IP && addrType != ADDR_TYPE_DOMAIN && addrType != ADDR_TYPE_IPV6 {
     writeAck(conn, REP_ADDRESS_TYPE_NOT_SUPPORTED)
     return
   }
@@ -108,13 +108,16 @@ func handleConnection(conn *net.TCPConn) {
     read(conn, &domainLength)
     address = make([]byte, domainLength)
     read(conn, address)
+  } else if addrType == ADDR_TYPE_IPV6 {
+    address = make([]byte, 16)
+    read(conn, address)
   }
   var port uint16
   read(conn, &port)
 
   var hostPort string
-  if addrType == ADDR_TYPE_IP {
-    ip := net.IPv4(address[0], address[1], address[2], address[3])
+  if addrType == ADDR_TYPE_IP || addrType == ADDR_TYPE_IPV6 {
+    ip := net.IP(address)
     hostPort = net.JoinHostPort(ip.String(), strconv.Itoa(int(port)))
   } else if addrType == ADDR_TYPE_DOMAIN {
     hostPort = net.JoinHostPort(string(address), strconv.Itoa(int(port)))
