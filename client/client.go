@@ -11,6 +11,7 @@ import (
   "time"
   "runtime"
   "math/rand"
+  "bytes"
 )
 
 var (
@@ -76,10 +77,14 @@ func handleConnection(conn *net.TCPConn) {
   methods := make([]byte, nMethods)
   read(conn, methods)
   write(conn, VERSION)
-  if ver != VERSION || nMethods != byte(1) || methods[0] != METHOD_NOT_REQUIRED {
+  if ver != VERSION || nMethods < byte(1) {
     write(conn, METHOD_NO_ACCEPTABLE)
   } else {
-    write(conn, METHOD_NOT_REQUIRED)
+    if bytes.IndexByte(methods, METHOD_NOT_REQUIRED) == -1 {
+      write(conn, METHOD_NO_ACCEPTABLE)
+  	} else {
+      write(conn, METHOD_NOT_REQUIRED)
+  	}
   }
 
   // request
