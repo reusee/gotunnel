@@ -1,7 +1,7 @@
 package main
 
 import (
-  gnet "../gnet"
+  tp "../transport"
   "log"
   "fmt"
   "net"
@@ -14,7 +14,7 @@ const LIMIT_FACTOR = 256
 func main() {
   runtime.GOMAXPROCS(3)
 
-  server, err := gnet.NewServer(PORT, KEY)
+  server, err := tp.NewServer(PORT, KEY)
   if err != nil {
     log.Fatal(err)
   }
@@ -36,7 +36,7 @@ func main() {
   }
 }
 
-func handleSession(session *gnet.Session) {
+func handleSession(session *tp.Session) {
   var hostPort string
 
   select {

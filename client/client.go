@@ -7,7 +7,7 @@ import (
   "encoding/binary"
   "io"
   "strconv"
-  gnet "../gnet"
+  tp "../transport"
   "time"
   "runtime"
   "math/rand"
@@ -15,14 +15,14 @@ import (
 )
 
 var (
-  client *gnet.Client
+  client *tp.Client
 )
 
 func main() {
   runtime.GOMAXPROCS(3)
 
   var err error
-  client, err = gnet.NewClient(SERVER, KEY, 32)
+  client, err = tp.NewClient(SERVER, KEY, 32)
   if err != nil {
     log.Fatal(err)
   }
@@ -146,7 +146,7 @@ func handleConnect(hostPort string, conn *net.TCPConn) {
 
   uid := rand.Int63()
   info := func(f string, vars ...interface{}) {
-    if gnet.DEBUG {
+    if tp.DEBUG {
       fmt.Printf(fmt.Sprintf("%d %s\n", uid, f), vars...)
     }
   }
@@ -157,7 +157,7 @@ func handleConnect(hostPort string, conn *net.TCPConn) {
   session.Send([]byte(hostPort))
   select {
   case msg := <-session.Message:
-    if msg.Tag != gnet.DATA {
+    if msg.Tag != tp.DATA {
       info("get non-data msg")
       return
     }
